@@ -1,25 +1,45 @@
 import os
 import shutil
-from mp3_tagger import MP3File, VERSION_1, VERSION_2, VERSION_BOTH
+from mp3_tagger import MP3File, VERSION_2, VERSION_BOTH
 from difflib import SequenceMatcher
 
-# VERY IMPORTANT: For any of these functions to run properly, you MUST 'Run as administrator' !!
+# VERY IMPORTANT: For any of these functions to work properly, you MUST 'Run as administrator' !!
 
 
 def similar(a, b):
-
-    # Function that will determine if artist or album already has near identical entry
+    """For avoiding redundancy when an album or artist name has a minor difference (ex.: capitalization)"""
     return SequenceMatcher(None, a, b).ratio()
 
 
 def sanitize(original):
-    try:
-        new = original.rstrip('\x00')
-        new = new.replace(':', ' -')
-        new = new.strip('\n')
-        return new
-    except:
-        return original
+    """To be used for name changes that apply to both tag names and folder names."""
+    new = original.strip('\n')
+    new = new.rstrip('\x00')
+    new = new.strip()
+    new = new.replace(' X ', ' & ')     # Ex.: DJ Muggs X Bambu
+    new = new.replace(' x ', ' & ')
+    if new[len(new) - 3: len(new)] == '12"':    # Ex.: Keep It Going 12"
+        print(new + " was changed to 'Single'.")
+        return 'Single'
+    return new
+
+
+def sanitize_folder(original):
+    """To be used for name changes that apply only to folder names, leavings tags untouched. This exists because
+    folders have stricter naming requirements than tags do."""
+    new = original.replace(':', ' -')
+    new = new.replace(' / ', ' & ')     # Ex.: Change / Survival Warz 12"
+    new = new.replace('/', ' - ')       # Ex.: The 18th Letter/The Book of Life
+    new = new.replace('; ', ' &')       # Ex.: Cannibal Ox; El-P; Vast Aire
+    new = new.replace('?', '')          # Ex.: MM..Food?
+    new = new.replace('!', '')          # Ex.: Blackout!
+    if new[0] == '"' and new[len(new) - 1] == '"':  # Ex.: "The Mouse & The Mask"
+        new = new.strip('"')
+    if new[len(new) - 1] == '.':        # Ex.: Remember When...
+        new = new.rstrip('.')
+    if original != new:
+        print('Folder name change: ' + original + ' => ' + new)
+    return new
 
 
 def dict_fill_from_bulk_mp3s(dict_input, mp3_location):
@@ -195,8 +215,7 @@ def bulk_mp3_move(dict_input, mp3_origin, mp3_destination):
 
 
 def text_export(dict_input):
-
-    # Writes all album and artist names in a dictionary to a text file
+    """Writes all album and artist names from a dictionary to a text file"""
     transfer = open('artists and albums.txt', 'w+')
 
     for entry in dict_input:
@@ -205,6 +224,23 @@ def text_export(dict_input):
         transfer.write(fixed + '\n')
 
     transfer.close()
+
+
+def update_dict(dict_input, artist_name, album_name):
+
+    for entry in dict_input:
+
+        if entry == artist_name:
+
+            for item in dict_input[artist_name]:
+
+                if item == album_name:
+                    return
+
+            dict_input[artist_name].append(album_name)
+            return
+
+    dict_input[artist_name] = [album_name]
 
 
 def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
@@ -218,7 +254,8 @@ def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
 
     for file in os.listdir(mp3_origin):
 
-        print('-------------------------------------------------------------------------------------------------------')
+        print('----------------------------------------------------------------------------------------------------'
+              '------------------------------')
         print('Currently processing: ')
         print(file)
 
@@ -256,7 +293,8 @@ def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
 
         print('The closest artist match in your library is: ' + artist_closest)
         print('The artist tag name for this file is: ' + artist_tag)
-        r1 = input("Input 'y' to use this artist name, input 't' to use the MP3 tag name, or input a new name to create a folder for instead.")
+        r1 = input("Input 'y' to use this artist name, input 't' to use the MP3 tag name, or input a new name to "
+                   "create a folder for instead.")
 
         if r1 == 'y':
             true_artist = artist_closest
@@ -266,12 +304,13 @@ def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
             for item in dict_input[artist_closest]:
 
                 if similar(item, album_tag) > album_sim_high:
-                    album_sim_high = similar(item, artist_tag)
+                    album_sim_high = similar(item, album_tag)
                     album_closest = item
 
             print('The closest album match in your library is: ' + album_closest)
             print('The album tag name for this file is: ' + album_tag)
-            r2 = input("Input 'y' to use this album name, input 't' to use the MP3 tag name, or input a new name to create a folder for instead.")
+            r2 = input("Input 'y' to use this album name, input 't' to use the MP3 tag name, or input a new name to "
+                       "create a folder for instead.")
 
             if r2 == 'y':
                 true_album = album_closest
@@ -279,39 +318,41 @@ def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
 
             elif r2 == 't':
                 true_album = album_tag
-                new_location = mp3_destination + '\\' + artist_closest + '\\' + album_tag
+                new_location = mp3_destination + '\\' + artist_closest + '\\' + sanitize_folder(album_tag)
 
             else:
                 true_album = r2
-                new_location = mp3_destination + '\\' + artist_closest + '\\' + r2
+                new_location = mp3_destination + '\\' + artist_closest + '\\' + sanitize_folder(r2)
 
         elif r1 == 't':
             true_artist = artist_tag
             print('The album tag name for this file is: ' + album_tag)
-            r3 = input("Input 't' again to use the MP3 album tag, otherwise input an album name to create a folder for instead.")
+            r3 = input("Input 't' again to use the MP3 album tag, otherwise input an album name to create a folder "
+                       "for instead.")
 
             if r3 == 't':
                 true_album = album_tag
-                new_location = mp3_destination + '\\' + artist_tag + '\\' + album_tag
+                new_location = mp3_destination + '\\' + sanitize_folder(artist_tag) + '\\' + sanitize_folder(album_tag)
 
             else:
                 true_album = r3
-                new_location = mp3_destination + '\\' + artist_tag + '\\' + r3
+                new_location = mp3_destination + '\\' + sanitize_folder(artist_tag) + '\\' + sanitize_folder(r3)
 
         else:
             true_artist = r1
             print('The album tag name for this file is: ' + album_tag)
-            r4 = input("Input 't' to use the MP3 album tag, otherwise input an album name to create a folder for instead.")
+            r4 = input("Input 't' to use the MP3 album tag, otherwise input an album name to create a folder "
+                       "for instead.")
 
             if r4 == 't':
                 true_album = album_tag
-                new_location = mp3_destination + '\\' + r1 + '\\' + album_tag
+                new_location = mp3_destination + '\\' + sanitize_folder(r1) + '\\' + sanitize_folder(album_tag)
                 song_file.artist = r1
                 song_file.save()
 
             else:
                 true_album = r4
-                new_location = mp3_destination + '\\' + r1 + '\\' + r4
+                new_location = mp3_destination + '\\' + sanitize_folder(r1) + '\\' + sanitize_folder(r4)
 
         # Saves MP3 tags so ensure that they match their corresponding folder names
         song_file.set_version(VERSION_BOTH)
@@ -325,6 +366,7 @@ def individual_mp3_move(dict_input, mp3_origin, mp3_destination):
             os.makedirs(new_location)
 
         shutil.move(song_location, new_location)
+        update_dict(dict_input, true_artist, true_album)
 
 
 def main():
