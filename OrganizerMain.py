@@ -107,11 +107,11 @@ def dict_fill_from_bulk_mp3s(dict_input, mp3_location):
 def bulk_create_folders(dict_input, mp3_destination):
 
     for artist in dict_input:
-        artist_folder = mp3_destination + '\\' + artist
+        artist_folder = mp3_destination + '\\' + sanitize_folder(artist)
 
         for album in dict_input[artist]:
             print('Processing folder creation for: ' + artist + ' - ' + album)
-            album_folder = artist_folder + '\\' + album
+            album_folder = artist_folder + '\\' + sanitize_folder(album)
 
             if os.path.isdir(album_folder):
                 continue
@@ -203,11 +203,11 @@ def bulk_mp3_move(dict_input, mp3_origin, mp3_destination):
                         album_sim_high = similar(album_name, album_entry)
                         true_album = album_entry
 
-                new_location = mp3_destination + '\\' + true_artist + '\\' + true_album
+                end_path = mp3_destination + '\\' + sanitize_folder(true_artist) + '\\' + sanitize_folder(true_album)
 
                 try:
-                    shutil.move(song_location, new_location)
-                    print(song + ' successfully moved to: ' + new_location + '.')
+                    shutil.move(song_location, end_path)
+                    print(song + ' successfully moved to: ' + end_path + '.')
 
                 except:
                     print(song + ' failed to move.')
